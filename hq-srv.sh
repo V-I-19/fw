@@ -104,3 +104,56 @@ cat > /etc/resolv.conf <<EOF
 
 EOF
 chattr +i /etc/resolv.conf
+
+apt-get install -y lamp-server
+
+mount /dev/sr1 /mnt || true
+
+cp /mnt/web/index.php /var/www/html/
+cp /mnt/web/logo.png /var/www/html/
+
+sed -i "s/\$username = \"user\";/\$username = \"web1\";/" /var/www/html/index.php
+sed -i "s/\$password = \"password\";/\$password = \"P@ssw0rd\";/" /var/www/html/index.php
+sed -i "s/\$dbname = \"db\";/\$dbname = \"webdb\";/" /var/www/html/index.php
+
+systemctl enable --now mariadb
+
+mariadb -u root <<EOF
+CREATE DATABASE IF NOT EXISTS webdb;
+CREATE USER IF NOT EXISTS 'web1'@'localhost' IDENTIFIED BY 'P@ssw0rd';
+GRANT ALL PRIVILEGES ON webdb.* TO 'web1'@'localhost' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+EOF
+
+mariadb -u web1 -p'P@ssw0rd' webdb < /mnt/web/dump.sql
+
+mariadb -u root <<EOF
+USE webdb;
+SHOW TABLES;
+EOF
+
+systemctl enable --now httpd2
+
+apt-get install atop -y
+systemctl enable --now atop
+cat <<EOF > /etc/default/atop
+LOGOPTS="-R"
+LOGINTERVAL=420
+LOGGENERATIONS=28
+LOGPATH=/var/log/atop
+EOF
+
+apt-get install -y cups cups-pdf
+systemctl enable --now cups
+cupsctl --share-printers --remote-any
+systemctl restart cups
+
+apt-get install -y fail2ban python3-module-systemd
+sed -i 's/before = paths-altlinux.conf/before = paths-altlinux-systemd.conf/' /etc/fail2ban/jail.conf
+sed -i '/^\[sshd\]/a\enabled = true' /etc/fail2ban/jail.conf
+sed -i '/^\[sshd\]/,/^\[/{s/^port.*/port    = 2027/}' /etc/fail2ban/jail.conf
+sed -i '/^\[sshd\]/,/^\[/s/port.*2027/&\nmaxretry = 3/' /etc/fail2ban/jail.conf
+sed -i '/^\[sshd\]/,/^\[/s/maxretry.*3/&\nfindtime = 10m/' /etc/fail2ban/jail.conf
+sed -i '/^\[sshd\]/,/^\[/s/findtime.*10m/&\nbantime = 1m/' /etc/fail2ban/jail.conf
+systemctl enable --now fail2ban
+systemctl restart fail2ban
