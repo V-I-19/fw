@@ -55,3 +55,11 @@ echo "- Пользователь: sshuser (пароль: P@ssw0rd)"
 echo "- SSH порт: 2027"
 echo "- Root-логин запрещен"
 echo "- Баннер создан"
+
+cat >> /etc/hosts <<EOF
+172.16.1.1 web.au-team.irpo
+172.16.2.1 docker.au-team.irpo
+192.168.100.2 hq-srv.au-team.irpo
+EOF
+
+apt-get install -y yandex-browser-stable
